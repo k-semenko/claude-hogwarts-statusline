@@ -64,8 +64,8 @@ wires it up via `${CLAUDE_PLUGIN_ROOT}`). If it doesn't appear immediately, run
 ## 🎓 Choose your house
 
 ```text
-/hogwarts-statusline             # interactive picker (Gryffindor / Slytherin / Ravenclaw / Hufflepuff)
-/hogwarts-statusline slytherin   # set directly (also accepts prefixes & animal aliases)
+/hogwarts-statusline:hogwarts-statusline             # interactive picker (Gryffindor / Slytherin / Ravenclaw / Hufflepuff)
+/hogwarts-statusline:hogwarts-statusline slytherin   # set directly (also accepts prefixes & animal aliases)
 ```
 
 The choice is stored in `~/.claude/hogwarts-statusline.json` and read on the next
