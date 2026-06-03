@@ -1,0 +1,7 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hogwarts-statusline.py\"",
+    "padding": 0
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "hogwarts-statusline",
+  "owner": {
+    "name": "Kirill Semenko"
+  },
+  "metadata": {
+    "description": "Harry Potter themed statusline for Claude Code",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "hogwarts-statusline",
+      "source": "./plugin",
+      "description": "Hogwarts-themed statusline — house colours, crest emoji, context & rate-limit bars with reset timers.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Kirill Semenko"
+      },
+      "homepage": "https://github.com/k-semenko/claude-hogwarts-statusline",
+      "repository": "https://github.com/k-semenko/claude-hogwarts-statusline",
+      "keywords": ["statusline", "harry-potter", "hogwarts", "theme"],
+      "category": "statusline",
+      "tags": ["statusline", "theme", "harry-potter", "hogwarts"]
+    }
+  ]
+}
