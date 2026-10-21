@@ -229,6 +229,18 @@ def short_path(p, maxlen):
     out = os.sep.join(parts[:1] + [s[:1] for s in parts[1:-1] if s] + parts[-1:])
     return out if len(out) <= maxlen else "…" + p[-(maxlen - 1):]
 
+def repo_url():
+    host, owner, name = (g("workspace", "repo", k) for k in ("host", "owner", "name"))
+    return f"https://{host}/{owner}/{name}" if host and owner and name else None
+
+def branch_url():
+    base = repo_url()
+    if not base or not branch:
+        return None
+    # GitLab keeps branch pages under /-/tree; self-hosted GitLab is recognised by its MR kind.
+    gitlab = "gitlab" in (g("workspace", "repo", "host") or "") or pr.get("kind") == "mr"
+    return f"{base}/-/tree/{branch}" if gitlab else f"{base}/tree/{branch}"
+
 def pr_mark():
     if not pr.get("number"):
         return ""
@@ -302,12 +314,12 @@ def seg_lim(label, lim, lvl, tier, pace=None):
 
 def seg_loc(tier, branch_max, path_max=40):
     crest = f"{H['emoji']} "
-    br = f" {ACC}⎇{RESET} {TEXT}{ellipsize(branch, branch_max)}{RESET}" if branch else ""
+    br = f" {ACC}⎇{RESET} {TEXT}{link(branch_url(), ellipsize(branch, branch_max))}{RESET}" if branch else ""
     if tier == "wide":
-        return f"{crest}{TEXT}{short_path(display_path(), path_max)}{RESET}{br}{pr_mark()}"
+        return f"{crest}{TEXT}{link(repo_url(), short_path(display_path(), path_max))}{RESET}{br}{pr_mark()}"
     if tier == "mid":
-        return f"{crest}{TEXT}{ellipsize(repo_name(), 16)}{RESET}{br}{pr_mark()}"
-    loc = crest + (br.lstrip() or f"{TEXT}{ellipsize(repo_name(), 16)}{RESET}")
+        return f"{crest}{TEXT}{link(repo_url(), ellipsize(repo_name(), 16))}{RESET}{br}{pr_mark()}"
+    loc = crest + (br.lstrip() or f"{TEXT}{link(repo_url(), ellipsize(repo_name(), 16))}{RESET}")
     return loc if tier == "tiny" else loc + pr_mark()
 
 def main_line(tier, branch_max):
@@ -405,7 +417,7 @@ def render_classic():
 
     content_w = max(vlen(c) for c in core)
     deco = vlen("⌂ ") + (vlen("  ⎇ ") + len(branch) if branch else 0)
-    loc = f"{MUTED}⌂{RESET} {TEXT}{short_path(display_path(), max(10, content_w - deco))}{RESET}"
+    loc = f"{MUTED}⌂{RESET} {TEXT}{link(repo_url(), short_path(display_path(), max(10, content_w - deco)))}{RESET}"
     if branch:
         loc += f"  {ACC}⎇{RESET} {GRN}{branch}{RESET}"
     inner = max(content_w, vlen(loc))

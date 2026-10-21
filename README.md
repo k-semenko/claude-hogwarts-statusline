@@ -27,8 +27,9 @@ When a limit is about to run out, the bottom line becomes a Howler:
 - **Phrase of the day** — a dim line of original Hogwarts-flavoured advice, new on every prompt.
 - **Adapts to terminal width** (`$COLUMNS`): shortens the branch first, then switches to
   compact layouts (`5h 70%▲40` = 40 points ahead of pace). A burning limit always stays visible.
-- **Pull / merge request** of the current branch (`⇡#123`, `⇡!123` for GitLab), coloured by
-  review state and clickable in terminals with OSC 8 links.
+- **Clickable links** in terminals with OSC 8 support (iTerm2, kitty, WezTerm): the path or repo
+  name opens the repository, the branch opens its page, and the pull / merge request
+  (`⇡#123`, `⇡!123` for GitLab) opens the request, coloured by review state.
 - **Classic layout** — the original seven-line boxed HUD, still available.
 - **English and Russian** phrases and warnings.
 
