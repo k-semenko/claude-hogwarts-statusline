@@ -1,0 +1,71 @@
+# -*- coding: utf-8 -*-
+"""Фразы дня для второй строки statusline. Свои, в духе Хогвартса, без цитат из книг.
+{house} — имя факультета (en), {house_dat} — в дательном падеже (ru)."""
+
+PHRASES = {
+    "ru": [
+        "Экспеллиармус — отбери у бага палочку",
+        "Акцио, документация!",
+        "Мантия-невидимка не спасёт от code review",
+        "Обливиэйт не действует на git history",
+        "Выручай-комната откроется, если знаешь, что ищешь. Grep тоже",
+        "Даже Гермиона дочитывает инструкцию до конца",
+        "Пять очков {house_dat} за зелёный CI",
+        "Прытко пишущее перо пишет быстро, но коммит проверяй сам",
+        "Сначала тест, потом заклинание",
+        "Люмос — свет на код, который не трогали с 2019 года",
+        "Нокс. Пора выключить лишние логи",
+        "Протего: сначала бэкап, потом миграция",
+        "Даже Феликс Фелицис не напишет за тебя тесты",
+        "Распределяющая шляпа тоже сомневалась. Это нормально",
+        "Тайная комната — это legacy без документации",
+        "Маховик времени не откатит прод. Держи план отката",
+        "Карта Мародёров видит всех. Логи тоже",
+        "Репаро чинит очки, а не race condition",
+        "Вингардиум Левиоса: ударение важно, отступы тоже",
+        "Совы приносят письма, CI — новости",
+        "Омут памяти — это git log с хорошими сообщениями",
+        "Громовещатель проще не получать, чем читать",
+        "Дементоры питаются флаки-тестами",
+        "Хагрид тоже говорил лишнее. Проверь, что в логах нет секретов",
+    ],
+    "en": [
+        "Expelliarmus — disarm the bug first",
+        "Accio documentation!",
+        "An Invisibility Cloak won't hide you from code review",
+        "Obliviate doesn't work on git history",
+        "The Room of Requirement opens for those who know what they need. So does grep",
+        "Even Hermione reads the docs to the end",
+        "Five points to {house} for a green CI",
+        "A Quick-Quotes Quill writes fast. Review the commit yourself",
+        "Test first, cast later",
+        "Lumos — shine a light on code untouched since 2019",
+        "Nox. Time to switch off the noisy logs",
+        "Protego: back up before you migrate",
+        "Even Felix Felicis won't write your tests",
+        "The Sorting Hat hesitated too. That's fine",
+        "The Chamber of Secrets is legacy code with no docs",
+        "A Time-Turner won't roll back prod. Keep a rollback plan",
+        "The Marauder's Map sees everyone. So do the logs",
+        "Reparo fixes glasses, not race conditions",
+        "Wingardium Leviosa: stress matters, and so does indentation",
+        "Owls bring letters. CI brings news",
+        "A Pensieve is just git log with good messages",
+        "Easier to avoid a Howler than to read one",
+        "Dementors feed on flaky tests",
+        "Hagrid said too much once. Check your logs for secrets",
+    ],
+}
+
+HOWLER = {
+    "ru": {
+        "pace":   "{w} {p}% — на этом темпе кончится через {eta}, сброс через {r}",
+        "limit":  "{w} {p}% — лимит на исходе, сброс через {r}",
+        "ctx":    "ctx {p}% — пора /compact",
+    },
+    "en": {
+        "pace":   "{w} {p}% — at this pace runs out in {eta}, resets in {r}",
+        "limit":  "{w} {p}% — limit nearly spent, resets in {r}",
+        "ctx":    "ctx {p}% — time to /compact",
+    },
+}

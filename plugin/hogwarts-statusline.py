@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Тематический statusline для Claude Code в стиле Гарри Поттера (Hogwarts HUD).
-Рамка в цвете факультета; в заголовке — эмодзи-зверь и название факультета
-(🦁/🐍/🦅/🦡), внутри — бары (ctx=контекст, ⧗5h / ◐7d = лимиты со временем
-сброса) и характеристики справа (галлеоны=стоимость, ранг волшебника=«уровень»).
-Эмодзи-зверь изолирован в заголовке (инфо-строки — глифы ширины 1), поэтому
-его непредсказуемая в разных терминалах ширина не «двигает» рамку — в худшем
-случае чуть сместится лишь правый верхний угол.
+Тематический statusline для Claude Code в стиле Гарри Поттера.
 
-Факультет выбирается (в порядке приоритета):
-  1) переменной окружения CC_HOUSE;
-  2) полем "house" в ~/.claude/hogwarts-statusline.json (меняется командой /hogwarts-statusline);
-  3) по умолчанию — gryffindor.
-Любой регистр; работают полные имена, префиксы и алиасы-животные:
-  gryffindor | slytherin | ravenclaw | hufflepuff
-  lion       | snake     | eagle/raven | badger        (алиасы)
+Раскладка "v2" (по умолчанию):
+  🦁 aqua ⎇ fix-ios-sharing ⇡!1438✓ │ ctx 25% │ 5h █┃░░░ 18% ⟲2h16m │ 7d ██░░░ 47% ⟲3d5h │ ⊚ $8.12
+     Сначала тест, потом заклинание         ← фраза дня; при тревоге её место занимает Howler
 
-Запускается плагином автоматически (statusLine в settings.json плагина).
-Сменить факультет проще всего командой /hogwarts-statusline.
-В инфо-строках — только глифы ширины 1, чтобы колонки не разъезжались.
+Раскладка "classic" — прежняя рамка ╭──╮ на семь строк.
+
+Настройки (переменная окружения → ~/.claude/hogwarts-statusline.json → дефолт):
+  house   CC_HOUSE            gryffindor | slytherin | ravenclaw | hufflepuff (префиксы и алиасы lion/snake/eagle/badger)
+  layout  CC_HOGWARTS_LAYOUT  v2 | classic
+  lang    CC_HOGWARTS_LANG    ru | en  (по умолчанию — из $LANG)
 """
-import sys, json, re, os, time
+import sys, json, re, os, time, hashlib
 
-# ---------- ANSI ----------
-RESET = "\033[0m"; BOLD = "\033[1m"
-def fg(r, g, b): return f"\033[38;2;{r};{g};{b}m"
-def lighten(c, k=2.4):                          # осветляем тёмный primary: иначе тонкие линии рамки
-    return tuple(min(255, round(x * k)) for x in c)  # (#1A472A и т.п.) сглаживаются в серый на тёмном фоне
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hogwarts_phrases import PHRASES, HOWLER
 
-# ---------- факультеты ----------
-# Эмодзи-зверь живёт только в заголовке (справа от него — линия, выравнивать
-# нечего), поэтому его непредсказуемая ширина не ломает инфо-строки.
+# ---------- настройки ----------
+def load_cfg():
+    try:
+        with open(os.path.expanduser("~/.claude/hogwarts-statusline.json"), encoding="utf-8") as f:
+            cfg = json.load(f)
+            return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+CFG = load_cfg()
+def setting(env, key, default=None):
+    return os.environ.get(env) or CFG.get(key) or default
+
 HOUSES = {
-    "gryffindor": dict(P=(174,  0,  1), A=(211,166, 37), Ab=(255,205, 60), name="Gryffindor", emoji="🦁"),
-    "slytherin":  dict(P=( 26, 71, 42), A=(170,172,178), Ab=(220,222,228), name="Slytherin",  emoji="🐍"),
-    "ravenclaw":  dict(P=( 34, 47, 91), A=(176,141, 87), Ab=(208,170,112), name="Ravenclaw",  emoji="🦅"),
-    "hufflepuff": dict(P=(120, 92, 18), A=(236,185, 57), Ab=(255,216, 80), name="Hufflepuff", emoji="🦡"),
+    "gryffindor": dict(P=(174,  0,  1), A=(211,166, 37), Ab=(255,205, 60), name="Gryffindor", dat="Гриффиндору", emoji="🦁"),
+    "slytherin":  dict(P=( 26, 71, 42), A=(170,172,178), Ab=(220,222,228), name="Slytherin",  dat="Слизерину",   emoji="🐍"),
+    "ravenclaw":  dict(P=( 34, 47, 91), A=(176,141, 87), Ab=(208,170,112), name="Ravenclaw",  dat="Когтеврану",  emoji="🦅"),
+    "hufflepuff": dict(P=(120, 92, 18), A=(236,185, 57), Ab=(255,216, 80), name="Hufflepuff", dat="Пуффендую",   emoji="🦡"),
 }
 ALIAS = {"lion": "gryffindor", "snake": "slytherin", "serpent": "slytherin",
          "eagle": "ravenclaw", "raven": "ravenclaw", "badger": "hufflepuff"}
@@ -46,32 +46,37 @@ def resolve_house(raw):
     k = ALIAS.get(k, k)
     if k in HOUSES:
         return k
-    for h in HOUSES:                       # допускаем префикс: "gryf", "slyth"…
+    for h in HOUSES:
         if k and h.startswith(k):
             return h
     return "gryffindor"
 
-def house_pref():                          # CC_HOUSE → конфиг-файл → дефолт
-    env = os.environ.get("CC_HOUSE")
-    if env:
-        return env
-    cfg = os.path.expanduser("~/.claude/hogwarts-statusline.json")
-    try:
-        with open(cfg, encoding="utf-8") as f:
-            return json.load(f).get("house")
-    except Exception:
-        return None
+H = HOUSES[resolve_house(setting("CC_HOUSE", "house"))]
+LAYOUT = "classic" if str(setting("CC_HOGWARTS_LAYOUT", "layout", "v2")).lower() == "classic" else "v2"
+_lang = str(setting("CC_HOGWARTS_LANG", "lang") or ("ru" if os.environ.get("LANG", "").lower().startswith("ru") else "en")).lower()
+LANG = "ru" if _lang.startswith("ru") else "en"
 
-H = HOUSES[resolve_house(house_pref())]
-PRIM  = fg(*lighten(H["P"]));  ACC = fg(*H["A"]);  ACCB = fg(*H["Ab"])  # PRIM используется только в рамке
-HOUSE_NAME = H["name"];  HOUSE_EMOJI = H["emoji"]
+# ---------- цвета ----------
+RESET = "\033[0m"; BOLD = "\033[1m"; ITALIC = "\033[3m"
+def fg(c): return f"\033[38;2;{c[0]};{c[1]};{c[2]}m"
+def bgc(c): return f"\033[48;2;{c[0]};{c[1]};{c[2]}m"
+def lighten(c, k): return tuple(min(255, round(x * k)) for x in c)
+def mix(a, b, t): return tuple(round(x * t + y * (1 - t)) for x, y in zip(a, b))
 
-WHITE = fg(228,230,235)
-GREY  = fg(140,150,160)
-RED   = fg(235, 90, 90)
-YEL   = fg(235,200, 80)
-GRN   = fg(110,210,120)
-EMPTY = fg(58, 60, 70)      # незаполненная часть бара
+TERM_BG = (16, 20, 28)      # фон терминала неизвестен — приглушаем к типичному тёмному
+
+TEXT    = fg((228,230,235))
+MUTED   = fg((140,150,160))
+WHISPER = fg(mix((140,150,160), TERM_BG, .42))
+EMPTY   = fg((52, 56, 68))
+WARN    = fg((235,200, 80))
+ALERT   = fg((235, 90, 90))
+GRN     = fg((110,210,120))
+HOWL    = bgc((78, 20, 26)) + fg((255,214,214)) + BOLD
+ACC     = fg(H["A"]); ACCB = fg(H["Ab"])
+# Разделители приглушены к фону: иначе красный Гриффиндора и жёлтый Пуффендуя спорят с тревогой и вниманием.
+SEPC    = fg(mix(lighten(H["P"], 2.0), TERM_BG, .5))
+FRAME   = fg(lighten(H["P"], 2.4))      # classic: рамка яркая, как раньше
 
 # ---------- ввод ----------
 try:
@@ -79,37 +84,13 @@ try:
 except Exception:
     data = {}
 
-def g(d, *path, default=None):
-    cur = d
+def g(*path, default=None):
+    cur = data
     for k in path:
         if not isinstance(cur, dict) or k not in cur:
             return default
         cur = cur[k]
     return cur if cur is not None else default
-
-model_name = g(data, "model", "display_name", default="Wizard")
-model_id   = g(data, "model", "id", default="")
-ctx_size   = g(data, "context_window", "context_window_size", default=200000) or 200000
-is_1m      = "1m" in model_id.lower() or ctx_size > 400000
-
-effort   = g(data, "effort", "level")
-thinking = g(data, "thinking", "enabled", default=False)
-
-cw       = g(data, "context_window", default={}) or {}
-in_tok   = cw.get("total_input_tokens", 0) or 0
-out_tok  = cw.get("total_output_tokens", 0) or 0
-used_pct = cw.get("used_percentage")
-if used_pct is None:
-    used_pct = round((in_tok + out_tok) / ctx_size * 100) if ctx_size else 0
-
-cost   = g(data, "cost", "total_cost_usd", default=0.0) or 0.0
-dur_ms = g(data, "cost", "total_duration_ms", default=0) or 0
-lim5    = g(data, "rate_limits", "five_hour", "used_percentage")
-lim7    = g(data, "rate_limits", "seven_day", "used_percentage")
-lim5_ts = g(data, "rate_limits", "five_hour", "resets_at")
-lim7_ts = g(data, "rate_limits", "seven_day", "resets_at")
-
-cwd      = g(data, "cwd") or g(data, "workspace", "current_dir") or os.getcwd()
 
 # ---------- форматтеры ----------
 def kfmt(n):
@@ -125,17 +106,8 @@ def dur(ms):
     if m < 60: return f"{m}m{s%60:02d}s"
     return f"{m//60}h{m%60:02d}m"
 
-def wizard_rank(out):
-    for thr, name in [(3000,"First-Year"), (10000,"Student"), (30000,"Prefect"),
-                      (60000,"Auror"), (120000,"Professor")]:
-        if out < thr:
-            return name
-    return "Headmaster"
-
-def reset_in(ts):                                # сколько осталось до сброса лимита (resets_at — epoch-сек)
-    if not ts:
-        return None
-    mins = max(0, round((ts - time.time()) / 60))
+def mins_fmt(mins):
+    mins = max(0, round(mins))
     if mins >= 1440:
         d, h = mins // 1440, (mins % 1440) // 60
         return f"{d}d{h}h" if h else f"{d}d"
@@ -143,41 +115,50 @@ def reset_in(ts):                                # сколько осталос
         return f"{mins//60}h{mins%60:02d}m"
     return f"{mins}m"
 
-ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+def reset_in(ts):
+    return mins_fmt((ts - time.time()) / 60) if ts else None
+
+# Ранг — по изменённым строкам: счётчики токенов в контракте описывают только текущий контекст, а не сессию.
+def wizard_rank(lines):
+    for thr, name in [(50,"First-Year"), (200,"Student"), (600,"Prefect"),
+                      (1500,"Auror"), (4000,"Professor")]:
+        if lines < thr:
+            return name
+    return "Headmaster"
+
+ESC_RE = re.compile(r"\033\[[0-9;]*m|\033\]8;[^\033]*\033\\")
 # JetBrains JediTerm рисует эмодзи шириной 1, обычные терминалы — 2
 EMOJI_W = 1 if "JetBrains" in os.environ.get("TERMINAL_EMULATOR", "") else 2
-def vlen(s):                                   # эмодзи = EMOJI_W ячеек, селектор VS16 = 0, прочее = 1
-    s = ANSI_RE.sub("", s); w = 0
-    for ch in s:
+def vlen(s):
+    w = 0
+    for ch in ESC_RE.sub("", s):
         o = ord(ch)
         if o == 0xFE0F: continue
         w += EMOJI_W if o >= 0x1F000 else 1
     return w
+
 def pad(s, w):
     d = w - vlen(s)
     return s + " " * d if d > 0 else s
 
-def bar(pct, width, color):
+def ellipsize(s, maxlen):
+    return s if len(s) <= maxlen else s[:max(1, maxlen - 1)] + "…"
+
+def link(url, text):                             # OSC 8: кликабельно в iTerm2/kitty/WezTerm, иначе просто текст
+    return f"\033]8;;{url}\033\\{text}\033]8;;\033\\" if url else text
+
+def bar(pct, width, color, mark=None):
     pct = max(0, min(100, pct))
     fill = round(pct / 100 * width)
-    return color + "█" * fill + EMPTY + "░" * (width - fill) + RESET
+    out = ""
+    for i in range(width):
+        if i == mark:
+            out += f"{TEXT}{BOLD}┃{RESET}"
+        else:
+            out += f"{color}█" if i < fill else f"{EMPTY}░"
+    return out + RESET
 
-def ctx_color(p): return GRN if p < 50 else (YEL if p < 80 else RED)
-def lim_color(p): return ACC if p < 85 else RED      # лимит на исходе → тревога
-
-def short_path(p, maxlen):
-    home = os.path.expanduser("~")
-    if p.startswith(home):
-        p = "~" + p[len(home):]
-    if len(p) <= maxlen:
-        return p
-    parts = p.split(os.sep)
-    head, tail = parts[:1], parts[-2:]
-    mid = [s[:1] for s in parts[1:-2] if s]
-    out = os.sep.join(head + mid + tail)
-    return out if len(out) <= maxlen else "…" + p[-(maxlen-1):]
-
-def git_branch(start):                            # ветку JSON не отдаёт — читаем .git/HEAD сами
+def git_branch(start):                            # вне worktree-сессии ветку JSON не отдаёт — читаем .git/HEAD
     d = os.path.abspath(start or ".")
     while True:
         gp = os.path.join(d, ".git")
@@ -185,88 +166,257 @@ def git_branch(start):                            # ветку JSON не отд�
             break
         parent = os.path.dirname(d)
         if parent == d:
-            return None
+            return None, None
         d = parent
+    root = d
     if os.path.isfile(gp):                        # worktree/submodule: ".git" — файл "gitdir: …"
         try:
             line = open(gp, encoding="utf-8").read().strip()
         except Exception:
-            return None
+            return None, root
         if line.startswith("gitdir:"):
             gp = os.path.normpath(os.path.join(d, line[7:].strip()))
     try:
         ref = open(os.path.join(gp, "HEAD"), encoding="utf-8").read().strip()
     except Exception:
-        return None
+        return None, root
     if ref.startswith("ref: refs/heads/"):
-        return ref[16:]                           # имя ветки
-    return ref[:7] if ref else None               # detached HEAD → короткий хэш
+        return ref[16:], root
+    return (ref[:7] if ref else None), root      # detached HEAD → короткий хэш
 
-# ---------- центр: титул, ранг/усилие, бары ----------
-MID_W = 30
-title = f"{ACCB}{BOLD}ϟ{RESET} {BOLD}{WHITE}{model_name}{RESET}"   # имя модели — как пришло из JSON
+# ---------- данные ----------
+model   = g("model", "display_name", default="Wizard")
+ctx_sz  = g("context_window", "context_window_size", default=200000) or 200000
+ctx_tok = g("context_window", "total_input_tokens", default=0) or 0
+ctx_pct = g("context_window", "used_percentage")
+ctx_pct = round(ctx_pct if ctx_pct is not None else (ctx_tok / ctx_sz * 100 if ctx_sz else 0))
 
-rank = wizard_rank(out_tok)
-rank_line = f"{ACC}✦{RESET} {WHITE}{rank}{RESET}"
-if effort:
-    rank_line += f" {GREY}·{RESET} {BOLD}{WHITE}{effort}{RESET}"  # effort — как пришло из JSON
-if thinking:
-    rank_line += f" {ACC}✦{RESET}"
+effort  = g("effort", "level")
+fast    = g("fast_mode", default=False)
+cost    = g("cost", "total_cost_usd", default=0.0) or 0.0
+dur_ms  = g("cost", "total_duration_ms", default=0) or 0
+added   = g("cost", "total_lines_added", default=0) or 0
+removed = g("cost", "total_lines_removed", default=0) or 0
 
-def lim_row(glyph, label, val, ts):
+cwd     = g("workspace", "current_dir") or g("cwd") or os.getcwd()
+_head, git_root = git_branch(cwd)
+branch  = g("worktree", "branch") or _head
+pr      = g("pr", default={}) or {}
+
+COLS  = int(os.environ.get("COLUMNS") or 0) or 120
+WIDTH = max(30, COLS - 4)                         # запас под отступ, который добавляет сам Claude Code
+NOW   = time.time()
+
+def display_path():
+    p = cwd
+    wt = re.search(r"/\.claude/worktrees/[^/]+", p)
+    if wt:                                        # worktree-сессия: показываем исходный репо, ветка скажет остальное
+        p = p[:wt.start()] + p[wt.end():]
+    home = os.path.expanduser("~")
+    return "~" + p[len(home):] if p.startswith(home) else p
+
+def repo_name():
+    name = g("workspace", "repo", "name")
+    if name:
+        return name
+    root = re.sub(r"/\.claude/worktrees/[^/]+.*$", "", git_root or cwd)
+    return os.path.basename(root.rstrip("/")) or "/"
+
+def short_path(p, maxlen):
+    if len(p) <= maxlen:
+        return p
+    parts = p.split(os.sep)
+    out = os.sep.join(parts[:1] + [s[:1] for s in parts[1:-1] if s] + parts[-1:])
+    return out if len(out) <= maxlen else "…" + p[-(maxlen - 1):]
+
+def pr_mark():
+    if not pr.get("number"):
+        return ""
+    color, mark = {"approved": (GRN, "✓"), "changes_requested": (ALERT, "✗"),
+                   "draft": (MUTED, "◌")}.get(pr.get("review_state"), (ACC, ""))
+    num = f"{'!' if pr.get('kind') == 'mr' else '#'}{pr['number']}{mark}"
+    return f" {color}{link(pr.get('url'), '⇡' + num)}{RESET}"
+
+# ---------- лимиты ----------
+WINDOW_5H = 5 * 3600
+
+def limit(win):
+    val = g("rate_limits", win, "used_percentage")
     if val is None:
-        return f"{GREY}{glyph} {label}  —{RESET}"
-    r = reset_in(ts)
-    tail = f"  {GREY}⟲ {r}{RESET}" if r else ""          # ⟲ = время до сброса лимита
-    return f"{ACC}{glyph}{RESET} {GREY}{label}{RESET} {bar(val,8,lim_color(val))} {lim_color(val)}{round(val):>3}%{RESET}{tail}"
+        return None
+    return dict(val=float(val), ts=g("rate_limits", win, "resets_at"))
 
-mid = [
-    title,
-    rank_line,
-    f"{ctx_color(used_pct) if used_pct>=80 else ACC}◈{RESET} {GREY}ctx{RESET} {bar(used_pct,8,ctx_color(used_pct))} {ctx_color(used_pct)}{used_pct:>3}%{RESET}",
-    lim_row("⧗", "5h ", lim5, lim5_ts),
-    lim_row("◐", "7d ", lim7, lim7_ts),
-]
-mid = [pad(m, MID_W) for m in mid]
+def pace_5h(lim):
+    """Темп только для 5h: окно короткое и почти целиком рабочее, линейная оценка ему подходит."""
+    if not lim or not lim["ts"]:
+        return None
+    left = max(0.0, lim["ts"] - NOW)
+    f = max(0.0, min(1.0, 1 - left / WINDOW_5H))
+    p = dict(frac=f, delta=lim["val"] - f * 100, eta=None)
+    if f >= 0.1 and lim["val"] > 0:               # первые 10% окна прогноз шумит
+        rate = lim["val"] / (f * WINDOW_5H)
+        eta = (100 - lim["val"]) / rate
+        if eta < left:
+            p["eta"] = eta
+    return p
 
-# ---------- справа: характеристики (метки по левому краю, значения по правому) ----------
-stats = [
-    ("↓", GRN,  "IN",   kfmt(in_tok)),
-    ("↑", ACC,  "OUT",  kfmt(out_tok)),
-    ("◈", ACC,  "CTX",  f"{kfmt(in_tok+out_tok)}/{'1M' if is_1m else str(ctx_size//1000)+'k'}"),
-    ("⧗", GREY, "TIME", dur(dur_ms)),
-    ("⊚", ACCB, "GAL",  f"${cost:.2f}"),                                       # галлеоны Гринготтса
-]
-vw = max(len(v) for *_, v in stats)            # ширина значения = самое длинное (CTX часто шире 7)
-right = [f"{c}{i}{RESET} {GREY}{l:<4}{RESET} {WHITE}{v:<{vw}}{RESET}" for i, c, l, v in stats]
-# ---------- сборка строк ----------
-core = [f"{mid[i]}    {right[i]}" for i in range(5)]
+L5, L7, LS = limit("five_hour"), limit("seven_day"), limit("spend_limit")
+P5 = pace_5h(L5)
 
-# ---------- строка-локация ----------
-branch = git_branch(cwd)
-content_w = max(vlen(c) for c in core)
-deco = vlen("⌂ ") + (vlen("  ⎇ ") + len(branch) if branch else 0)
-path = short_path(cwd, max(10, content_w - deco))
-loc  = f"{GREY}⌂{RESET} {WHITE}{path}{RESET}"
-if branch:
-    loc += f"  {ACC}⎇{RESET} {GRN}{branch}{RESET}"
+def level_limit(lim, pace=None):
+    if not lim:
+        return 0
+    if lim["val"] >= 85 or (pace and pace["eta"] is not None):
+        return 2
+    if lim["val"] >= 60 or (pace and pace["frac"] >= 0.1 and pace["delta"] > 5):
+        return 1
+    return 0
 
-INNER = max(content_w, vlen(loc))
+LV5, LV7, LVS = level_limit(L5, P5), level_limit(L7), level_limit(LS)
+LVC = 2 if ctx_pct >= 80 else (1 if ctx_pct >= 60 else 0)
+LEVEL_COLOR = {0: None, 1: WARN, 2: ALERT}
 
-# ---------- рамка в цвете факультета; эмодзи-зверь — в заголовке ----------
-# Инфо-строки состоят из глифов ширины 1 → рамка по ним сходится в любом терминале.
-# Эмодзи есть только в верхней строке: если терминал рисует его не в 2 ячейки,
-# сдвинется лишь правый ВЕРХНИЙ угол, а остальная рамка остаётся ровной.
-label  = f"──── {HOUSE_EMOJI}  {HOUSE_NAME} "         # 4 дефиса слева + 2 пробела после эмодзи
-dashes = max(0, (INNER + 2) - vlen(label))
-top    = f"{PRIM}╭────{RESET} {HOUSE_EMOJI}  {ACCB}{BOLD}{HOUSE_NAME}{RESET} {PRIM}{'─'*dashes}╮{RESET}"
-bottom = f"{PRIM}╰{'─'*(INNER + 2)}╯{RESET}"
-def boxed(c):
-    return f"{PRIM}│{RESET} {pad(c, INNER)} {PRIM}│{RESET}"
+# ---------- v2 ----------
+SEP = f" {SEPC}│{RESET} "
 
-# ---------- вывод ----------
-print(top)
-for c in core:
-    print(boxed(c))
-print(boxed(loc))
-print(bottom)
+def num(v, lvl, w=3):
+    c = LEVEL_COLOR[lvl]
+    return f"{c}{BOLD}{round(v):>{w}}%{RESET}" if c else f"{TEXT}{round(v):>{w}}%{RESET}"
+
+def seg_ctx():
+    return f"{MUTED}ctx{RESET} {num(ctx_pct, LVC, 1)}"
+
+def seg_lim(label, lim, lvl, tier, pace=None):
+    if not lim:
+        return None
+    r = reset_in(lim["ts"])
+    if tier == "wide":
+        mark = min(4, round(pace["frac"] * 5)) if pace else None
+        tail = f" {MUTED}⟲{r}{RESET}" if r else ""
+        return f"{MUTED}{label}{RESET} {bar(lim['val'], 5, LEVEL_COLOR[lvl] or ACC, mark)} {num(lim['val'], lvl)}{tail}"
+    out = f"{MUTED}{label}{RESET} {num(lim['val'], lvl, 1)}"
+    if pace and pace["frac"] >= 0.1:
+        d = round(pace["delta"])
+        out += f"{WARN}▲{d}{RESET}" if d > 0 else f"{MUTED}▼{-d}{RESET}"
+    return out
+
+def seg_loc(tier, branch_max, path_max=40):
+    crest = f"{H['emoji']} "
+    br = f" {ACC}⎇{RESET} {TEXT}{ellipsize(branch, branch_max)}{RESET}" if branch else ""
+    if tier == "wide":
+        return f"{crest}{TEXT}{short_path(display_path(), path_max)}{RESET}{br}{pr_mark()}"
+    if tier == "mid":
+        return f"{crest}{TEXT}{ellipsize(repo_name(), 16)}{RESET}{br}{pr_mark()}"
+    loc = crest + (br.lstrip() or f"{TEXT}{ellipsize(repo_name(), 16)}{RESET}")
+    return loc if tier == "tiny" else loc + pr_mark()
+
+def main_line(tier, branch_max):
+    segs = [seg_loc(tier, branch_max), seg_ctx(), seg_lim("5h", L5, LV5, tier, P5)]
+    if tier != "tiny" or LV7 == 2:                # совсем узко: 7d и spend — только когда горят
+        segs.append(seg_lim("7d", L7, LV7, tier))
+    if LS and (tier != "tiny" or LVS == 2):
+        segs.append(seg_lim("spend", LS, LVS, tier))
+    if tier in ("wide", "mid"):
+        segs.append(f"{ACCB}⊚{RESET} {TEXT}${cost:.2f}{RESET}")
+    return SEP.join(s for s in segs if s)
+
+def pick_main():
+    """Ширина: сначала ужимаем ветку, потом переходим на более компактную раскладку."""
+    full = len(branch or "")
+    for tier, floor in (("wide", 24), ("mid", 16), ("narrow", 8), ("tiny", 8)):
+        for bm in range(max(full, floor), floor - 1, -1):
+            line = main_line(tier, bm)
+            if vlen(line) <= WIDTH:
+                return tier, line
+    return "tiny", main_line("tiny", 8)
+
+def howler(tier):
+    t = HOWLER[LANG]
+    short = tier in ("narrow", "tiny")
+    if LV5 == 2:
+        r = reset_in(L5["ts"]) or "?"
+        if P5 and P5["eta"] is not None and not short:
+            return t["pace"].format(w="5h", p=round(L5["val"]), eta=mins_fmt(P5["eta"] / 60), r=r)
+        return f"5h {round(L5['val'])}% ⟲{r}" if short else t["limit"].format(w="5h", p=round(L5["val"]), r=r)
+    if LVC == 2:
+        return f"ctx {ctx_pct}% /compact" if short else t["ctx"].format(p=ctx_pct)
+    for w, lim, lv in (("7d", L7, LV7), ("spend", LS, LVS)):
+        if lv == 2:
+            r = reset_in(lim["ts"]) or "?"
+            return f"{w} {round(lim['val'])}% ⟲{r}" if short else t["limit"].format(w=w, p=round(lim["val"]), r=r)
+    return None
+
+def phrase():
+    seed = g("prompt_id") or g("session_id") or time.strftime("%Y-%m-%d")
+    pool = PHRASES[LANG]
+    i = int(hashlib.sha1(str(seed).encode()).hexdigest(), 16) % len(pool)
+    return pool[i].format(house=H["name"], house_dat=H["dat"])
+
+def render_v2():
+    tier, line = pick_main()
+    msg = howler(tier)
+    if msg:
+        second = f"{HOWL} 📜 {ellipsize(msg, WIDTH - 5)} {RESET}"
+    else:
+        indent = " " * (EMOJI_W + 1)              # фраза встаёт под текст, а не под эмодзи
+        second = f"{indent}{WHISPER}{ITALIC}{ellipsize(phrase(), WIDTH - len(indent))}{RESET}"
+    return [line, second]
+
+# ---------- classic: прежняя рамка ----------
+def render_classic():
+    title = f"{ACCB}{BOLD}ϟ{RESET} {BOLD}{TEXT}{model}{RESET}"
+    rank_line = f"{ACC}✦{RESET} {TEXT}{wizard_rank(added + removed)}{RESET}"
+    if effort:
+        rank_line += f" {MUTED}·{RESET} {BOLD}{TEXT}{effort}{RESET}"
+    if fast:
+        rank_line += f" {ACCB}{BOLD}ϟ{RESET}"
+
+    def ctx_color(p): return GRN if p < 50 else (WARN if p < 80 else ALERT)
+    def lim_color(p): return ACC if p < 85 else ALERT
+
+    def lim_row(glyph, label, lim):
+        if not lim:
+            return f"{MUTED}{glyph} {label}  —{RESET}"
+        r = reset_in(lim["ts"])
+        tail = f"  {MUTED}⟲ {r}{RESET}" if r else ""
+        v = lim["val"]
+        return f"{ACC}{glyph}{RESET} {MUTED}{label}{RESET} {bar(v, 8, lim_color(v))} {lim_color(v)}{round(v):>3}%{RESET}{tail}"
+
+    mid = [
+        title,
+        rank_line,
+        f"{ctx_color(ctx_pct) if ctx_pct >= 80 else ACC}◈{RESET} {MUTED}ctx{RESET} {bar(ctx_pct, 8, ctx_color(ctx_pct))} {ctx_color(ctx_pct)}{ctx_pct:>3}%{RESET}",
+        lim_row("⧗", "5h ", L5),
+        lim_row("◐", "7d ", L7),
+    ]
+    mid = [pad(m, 30) for m in mid]
+
+    pr_txt = f"{'!' if pr.get('kind') == 'mr' else '#'}{pr['number']}" if pr.get("number") else "—"
+    stats = [
+        ("◈", ACC,   "CTX",  f"{kfmt(ctx_tok)}/{kfmt(ctx_sz)}"),
+        ("±", GRN,   "CODE", f"+{added}/-{removed}"),
+        ("⧗", MUTED, "TIME", dur(dur_ms)),
+        ("⊚", ACCB,  "GAL",  f"${cost:.2f}"),
+        ("⇡", ACC,   "PR",   pr_txt),
+    ]
+    vw = max(len(v) for *_, v in stats)
+    right = [f"{c}{i}{RESET} {MUTED}{l:<4}{RESET} {TEXT}{v:<{vw}}{RESET}" for i, c, l, v in stats]
+    core = [f"{mid[i]}    {right[i]}" for i in range(5)]
+
+    content_w = max(vlen(c) for c in core)
+    deco = vlen("⌂ ") + (vlen("  ⎇ ") + len(branch) if branch else 0)
+    loc = f"{MUTED}⌂{RESET} {TEXT}{short_path(display_path(), max(10, content_w - deco))}{RESET}"
+    if branch:
+        loc += f"  {ACC}⎇{RESET} {GRN}{branch}{RESET}"
+    inner = max(content_w, vlen(loc))
+
+    # Эмодзи только в верхней строке: если терминал рисует его не в 2 ячейки, сдвинется лишь правый верхний угол.
+    label = f"──── {H['emoji']}  {H['name']} "
+    dashes = max(0, (inner + 2) - vlen(label))
+    top = f"{FRAME}╭────{RESET} {H['emoji']}  {ACCB}{BOLD}{H['name']}{RESET} {FRAME}{'─'*dashes}╮{RESET}"
+    bottom = f"{FRAME}╰{'─'*(inner + 2)}╯{RESET}"
+    boxed = lambda c: f"{FRAME}│{RESET} {pad(c, inner)} {FRAME}│{RESET}"
+    return [top] + [boxed(c) for c in core] + [boxed(loc), bottom]
+
+for row in (render_classic() if LAYOUT == "classic" else render_v2()):
+    print(row)
