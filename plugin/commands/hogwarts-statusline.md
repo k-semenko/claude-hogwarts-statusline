@@ -1,28 +1,33 @@
 ---
-description: Сменить факультет Hogwarts-statusline (цвет рамки и эмодзи-зверя)
-argument-hint: "[gryffindor|slytherin|ravenclaw|hufflepuff]"
+description: Настроить Hogwarts-statusline — факультет, раскладку (v2/classic) и язык фраз (ru/en)
+argument-hint: "[gryffindor|slytherin|ravenclaw|hufflepuff] [v2|classic] [ru|en]"
 ---
 
-# Смена факультета Hogwarts
+# Настройка Hogwarts-statusline
 
-Меняешь факультет тематического statusline. Выбор хранится в
-`~/.claude/hogwarts-statusline.json` (поле `house`), статуслайн читает его
+Настройки хранятся в `~/.claude/hogwarts-statusline.json`, статуслайн читает их
 при следующей перерисовке.
 
-Дома: **gryffindor** 🦁 · **slytherin** 🐍 · **ravenclaw** 🦅 · **hufflepuff** 🦡
-(принимаются префиксы вроде `slyth` и алиасы `lion`/`snake`/`eagle`/`badger`).
+| Поле | Значения | По умолчанию |
+|---|---|---|
+| `house` | **gryffindor** 🦁 · **slytherin** 🐍 · **ravenclaw** 🦅 · **hufflepuff** 🦡 (префиксы вроде `slyth` и алиасы `lion`/`snake`/`eagle`/`badger`) | `gryffindor` |
+| `layout` | `v2` — строка данных с эмодзи факультета, под ней фраза дня или предупреждение; `classic` — прежняя рамка на семь строк | `v2` |
+| `lang` | `ru` · `en` — язык фраз дня и предупреждений | по `$LANG` |
 
 Пользователь передал: `$ARGUMENTS`
 
 ## Что сделать
 
-1. Определи факультет:
-   - если аргумент задан — нормализуй его к одному из четырёх (учитывая префиксы и алиасы);
-   - если аргумент пуст — спроси через AskUserQuestion (4 дома, эмодзи в подписях 🦁🐍🦅🦡).
+1. Разбери аргументы в любом порядке:
+   - имя факультета (с учётом префиксов и алиасов) → `house`;
+   - `v2` или `classic` → `layout`;
+   - `ru` или `en` → `lang`.
+   Если аргументов нет — спроси через AskUserQuestion факультет (4 дома, эмодзи в подписях 🦁🐍🦅🦡)
+   и раскладку (`v2` / `classic`).
 
 2. Запиши выбор в `~/.claude/hogwarts-statusline.json`:
-   - сделай Read файла, если он есть (сохрани прочие поля), иначе создай новый;
-   - содержимое — JSON вида `{ "house": "<факультет>" }`.
+   - сделай Read файла, если он есть, и сохрани поля, которые пользователь не менял; иначе создай новый;
+   - пример: `{ "house": "slytherin", "layout": "v2", "lang": "ru" }`.
 
 3. Пропиши `statusLine` в `~/.claude/settings.json`:
    - найди путь к установленному скрипту:
@@ -34,11 +39,13 @@ argument-hint: "[gryffindor|slytherin|ravenclaw|hufflepuff]"
      "statusLine": {
        "type": "command",
        "command": "python3 \"/абсолютный/путь/к/hogwarts-statusline.py\"",
-       "padding": 0
+       "padding": 0,
+       "refreshInterval": 60
      }
      ```
+     `refreshInterval` нужен, чтобы метка темпа и отсчёты до сброса лимитов тикали и в простое.
    - запиши файл обратно (Edit/Write), не трогая остальные поля.
    - проверь валидность JSON:
-     `python3 -c "import json; json.load(open('/Users/YOUR_USER/.claude/settings.json')); print('OK')"`
+     `python3 -c "import json, os; json.load(open(os.path.expanduser('~/.claude/settings.json'))); print('OK')"`
 
-4. Подтверди: какой факультет выбран, статуслайн активирован.
+4. Подтверди: какой факультет, раскладка и язык выбраны.

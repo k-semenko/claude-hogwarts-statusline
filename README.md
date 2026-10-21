@@ -1,48 +1,42 @@
 # 🪄 Hogwarts Statusline for Claude Code
 
 A Harry Potter–themed [statusline](https://code.claude.com/docs/en/statusline) for
-[Claude Code](https://claude.com/claude-code): your **house crest and colours**,
-context & rate-limit bars with **reset countdowns**, session cost in *galleons*,
-and a **wizard rank** that grows with your output.
+[Claude Code](https://claude.com/claude-code): your house crest and colours, context and
+rate-limit usage with a **pace marker**, session cost in *galleons*, and a quiet line of
+Hogwarts wisdom that turns into a **Howler** when something needs your attention.
 
 ```
-╭──── 🐍  Slytherin ───────────────────────────────╮
-│ ϟ Opus 4.8 (1M context)           ↓ IN   471.1k  │
-│ ✦ First-Year · xhigh              ↑ OUT  2.9k    │
-│ ◈ ctx ████░░░░  47%               ◈ CTX  474k/1M │
-│ ⧗ 5h  ██░░░░░░  19%  ⟲ 1h40m      ⧗ TIME 23h28m  │
-│ ◐ 7d  █░░░░░░░  17%  ⟲ 3d4h       ⊚ GAL  $70.63  │
-│ ⌂ ~/work/project  ⎇ main                         │
-╰──────────────────────────────────────────────────╯
+🐍 ~/work/project ⎇ feature/login ⇡#1438✓ │ ctx 25% │ 5h █░┃░░  18% ⟲2h16m │ 7d ██░░░  47% ⟲3d5h │ ⊚ $8.12
+   Test first, cast later
 ```
 
-> Frame is rendered in your house colours — scarlet & gold for Gryffindor,
-> green & silver for Slytherin, blue & bronze for Ravenclaw, yellow & black for
-> Hufflepuff.
+When a limit is about to run out, the bottom line becomes a Howler:
+
+```
+🐍 ~/work/project ⎇ feature/login ⇡#1438✓ │ ctx 25% │ 5h ██┃█░  70% ⟲3h30m │ 7d ██░░░  47% ⟲3d5h │ ⊚ $8.12
+ 📜 5h 70% — at this pace runs out in 39m, resets in 3h30m
+```
 
 ## ✨ Features
 
-- **Four houses** with authentic colours and crest emoji: 🦁 Gryffindor ·
-  🐍 Slytherin · 🦅 Ravenclaw · 🦡 Hufflepuff.
-- **Context bar** (`ctx`) with green→yellow→red load colours.
-- **5-hour & 7-day rate-limit bars** with a **reset countdown** (`⟲ 1h40m`,
-  `⟲ 3d4h`); turns red when a limit is nearly exhausted.
-- **Wizard rank** by output tokens: First-Year → Student → Prefect → Auror →
-  Professor → Headmaster.
-- **Galleons** = session cost, plus IN/OUT tokens, elapsed time, context usage.
-- **Model name & effort shown verbatim** — new models / effort levels need no code changes.
-- **Robust alignment** — the only emoji lives in the header, so its
-  unpredictable terminal width never breaks the frame.
+- **Two lines** — data with your house crest up front, and a phrase or warning below.
+- **Pace marker** on the 5-hour limit: `┃` shows where usage would be if spent evenly until
+  the reset. Fill past the marker means you're burning faster than the window refills.
+- **Howler** — when the 5-hour limit will run out before it resets, a limit passes 85% or
+  the context passes 80%, the bottom line turns into a one-line warning.
+- **Phrase of the day** — a dim line of original Hogwarts-flavoured advice, new on every prompt.
+- **Adapts to terminal width** (`$COLUMNS`): shortens the branch first, then switches to
+  compact layouts (`5h 70%▲40` = 40 points ahead of pace). A burning limit always stays visible.
+- **Pull / merge request** of the current branch (`⇡#123`, `⇡!123` for GitLab), coloured by
+  review state and clickable in terminals with OSC 8 links.
+- **Classic layout** — the original seven-line boxed HUD, still available.
+- **English and Russian** phrases and warnings.
 
 ## 🖥️ Terminal compatibility
 
-The script auto-detects **JetBrains IDEs** (Rider, IntelliJ IDEA, PyCharm, etc.) via the
-`TERMINAL_EMULATOR=JetBrains-JediTerm` environment variable that JediTerm sets automatically.
-JediTerm renders emoji at 1-cell width instead of the standard 2 — without this correction the
-top-right corner of the frame drifts by one column. No configuration needed.
-
-All other terminals (iTerm2, kitty, Alacritty, WezTerm, macOS Terminal, …) are treated as
-standard 2-cell-wide emoji and need no adjustment.
+The script auto-detects **JetBrains IDEs** (Rider, IntelliJ IDEA, PyCharm, etc.) via
+`TERMINAL_EMULATOR=JetBrains-JediTerm` and counts the crest emoji as 1 cell there
+(2 cells everywhere else) when fitting the line to the terminal width.
 
 ## 📦 Requirements
 
@@ -61,35 +55,41 @@ The statusline activates automatically (the plugin ships a `settings.json` that
 wires it up via `${CLAUDE_PLUGIN_ROOT}`). If it doesn't appear immediately, run
 `/reload-plugins` or restart Claude Code.
 
-## 🎓 Choose your house
+## 🎓 Settings
 
 ```text
-/hogwarts-statusline:hogwarts-statusline             # interactive picker (Gryffindor / Slytherin / Ravenclaw / Hufflepuff)
-/hogwarts-statusline:hogwarts-statusline slytherin   # set directly (also accepts prefixes & animal aliases)
+/hogwarts-statusline:hogwarts-statusline                      # interactive picker
+/hogwarts-statusline:hogwarts-statusline slytherin            # set the house
+/hogwarts-statusline:hogwarts-statusline ravenclaw classic en # house, layout and language at once
 ```
 
-The choice is stored in `~/.claude/hogwarts-statusline.json` and read on the next
-redraw. You can also force a house with the `CC_HOUSE` environment variable
-(it takes priority over the file).
+Settings live in `~/.claude/hogwarts-statusline.json`; environment variables take priority:
+
+| Setting  | Values                                             | Env                  | Default        |
+|----------|----------------------------------------------------|----------------------|----------------|
+| `house`  | `gryffindor` · `slytherin` · `ravenclaw` · `hufflepuff` | `CC_HOUSE`       | `gryffindor`   |
+| `layout` | `v2` · `classic`                                   | `CC_HOGWARTS_LAYOUT` | `v2`           |
+| `lang`   | `en` · `ru`                                        | `CC_HOGWARTS_LANG`   | from `$LANG`   |
+
+House names are case-insensitive; prefixes (`slyth`) and animal aliases
+(`lion` / `snake` / `eagle`/`raven` / `badger`) work too.
 
 ## 🧭 What it shows
 
-| Element            | Meaning                                                        |
-|--------------------|----------------------------------------------------------------|
-| Header             | House crest + name, frame in house colours                     |
-| `ϟ <model>`        | Model display name (verbatim)                                  |
-| `✦ <rank> · <effort>` | Wizard rank (by output tokens) and current effort           |
-| `◈ ctx`            | Context-window usage                                           |
-| `⧗ 5h` / `◐ 7d`    | Rate limits + `⟲` time until reset                             |
-| `⊚ GAL`            | Session cost (galleons)                                        |
-| `↓ IN` / `↑ OUT`   | Input / output tokens                                          |
-| `⧗ TIME`           | Elapsed session time                                           |
-| `◈ CTX`            | Tokens used / context-window size                              |
-| `⌂` / `⎇`          | Working directory / git branch                                 |
+| Element               | Meaning                                                      |
+|-----------------------|--------------------------------------------------------------|
+| `🦁` … / `⎇`          | House crest and working directory / git branch               |
+| `⇡#123` / `⇡!123`     | Open PR / MR: `✓` approved, `✗` changes requested, `◌` draft |
+| `ctx`                 | Context-window usage                                         |
+| `5h`                  | 5-hour limit, `┃` pace marker, `⟲` time until reset          |
+| `7d`                  | 7-day limit and time until reset (no pace: the week isn't spent evenly) |
+| `spend`               | Spend limit behind a Claude apps gateway                     |
+| `⊚`                   | Session cost (galleons)                                      |
+| `📜`                  | Howler: what's running out and when                          |
 
 ## 🔧 Manual install (without the plugin system)
 
-1. Copy `plugin/hogwarts-statusline.py` somewhere, e.g. `~/.claude/`.
+1. Copy `plugin/hogwarts-statusline.py` and `plugin/hogwarts_phrases.py` into the same folder, e.g. `~/.claude/`.
 2. In `~/.claude/settings.json`:
 
 ```json
@@ -97,21 +97,13 @@ redraw. You can also force a house with the `CC_HOUSE` environment variable
   "statusLine": {
     "type": "command",
     "command": "CC_HOUSE=slytherin python3 /absolute/path/to/hogwarts-statusline.py",
-    "padding": 0
+    "padding": 0,
+    "refreshInterval": 60
   }
 }
 ```
 
 Change `CC_HOUSE` to your house (or drop it and use the config file).
-
-## 🛠️ How the house is resolved
-
-1. `CC_HOUSE` environment variable (if set), then
-2. `house` field in `~/.claude/hogwarts-statusline.json`, then
-3. default → `gryffindor`.
-
-Names are case-insensitive; prefixes (`slyth`) and animal aliases
-(`lion` / `snake` / `eagle`/`raven` / `badger`) work too.
 
 ## 📜 License
 
